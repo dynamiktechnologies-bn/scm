@@ -3,6 +3,7 @@ from sqlalchemy import and_
 from decimal import Decimal
 from app.models.approval import ApprovalWorkflow, ApprovalStep, ApprovalRecord
 from app.schemas.approval import ApprovalStatus, ApprovalRecordOut
+from app.services.notification_service import NotificationService
 
 
 class ApprovalService:
@@ -26,9 +27,13 @@ class ApprovalService:
         db: Session,
         workflow_id: int,
         document_type: str,
-        document_id: int
+        document_id: int,
+        document_number: str | None = None
     ) -> list[ApprovalRecord]:
-        """Create approval records for each step in the workflow."""
+        """Create approval records for each step in the workflow.
+
+        Also notifies approvers that a document needs their approval.
+        """
         workflow = db.query(ApprovalWorkflow).filter(ApprovalWorkflow.id == workflow_id).first()
         if not workflow:
             return []
@@ -46,6 +51,22 @@ class ApprovalService:
             records.append(record)
 
         db.commit()
+
+        # Notify approvers for the first step
+        first_step = next((s for s in workflow.steps if not s.is_optional), workflow.steps[0] if workflow.steps else None)
+        if first_step:
+            doc_name = f"{document_type} {document_number}" if document_number else f"{document_type} #{document_id}"
+            NotificationService.create_notifications_for_role(
+                db,
+                first_step.required_role,
+                notification_type="APPROVAL_PENDING",
+                title=f"Approval Needed: {doc_name}",
+                message=f"{doc_name} is waiting for your approval. You have approval authority for step {first_step.step_number}.",
+                document_type=document_type,
+                document_id=document_id,
+                document_number=document_number,
+            )
+
         return records
 
     @staticmethod
@@ -68,6 +89,16 @@ class ApprovalService:
         steps_completed = sum(1 for r in records if r.status == "APPROVED")
         is_approved = all(r.status in ("APPROVED", "SKIPPED") for r in records)
 
+        # Build records with step information
+        records_out = []
+        for r in records:
+            record_dict = ApprovalRecordOut.model_validate(r).model_dump()
+            # Add step information if available
+            if r.step:
+                record_dict["step_number"] = r.step.step_number
+                record_dict["required_role"] = r.step.required_role
+            records_out.append(ApprovalRecordOut(**record_dict))
+
         return ApprovalStatus(
             document_type=document_type,
             document_id=document_id,
@@ -75,7 +106,7 @@ class ApprovalService:
             total_steps=len(records),
             steps_completed=steps_completed,
             is_approved=is_approved,
-            records=[ApprovalRecordOut.model_validate(r) for r in records],
+            records=records_out,
         )
 
     @staticmethod
@@ -117,7 +148,54 @@ class ApprovalService:
 
         # Check if all approvals are complete
         status = ApprovalService.get_approval_status(db, document_type, document_id)
-        return status.is_approved if status else False
+        is_approved = status.is_approved if status else False
+
+        if is_approved:
+            # All approvals complete - notify relevant users
+            pending_records = [r for r in status.records if r.status == "PENDING"]
+            if not pending_records:
+                # Find the document number for the notification
+                document_number = f"{document_type}#{document_id}"
+                # Try to get actual document number (would need to query the document)
+                NotificationService.create_notifications_for_role(
+                    db,
+                    "ADMIN",  # Notify admins when document is fully approved
+                    notification_type="APPROVED",
+                    title=f"Document Approved: {document_number}",
+                    message=f"{document_number} has been fully approved and is ready for next steps.",
+                    document_type=document_type,
+                    document_id=document_id,
+                    document_number=document_number,
+                )
+        else:
+            # Find next pending step and notify approvers
+            next_record = next((r for r in status.records if r.status == "PENDING"), None)
+            if next_record:
+                step = record.step.workflow.steps[len([r for r in status.records if r.status == "APPROVED"]) if record in status.records else 0]
+                # Get the actual next step
+                pending_step = None
+                for s in record.step.workflow.steps:
+                    if any(r.status == "PENDING" and r.step_id == s.id for r in db.query(ApprovalRecord).filter(
+                        and_(ApprovalRecord.document_type == document_type,
+                             ApprovalRecord.document_id == document_id)
+                    ).all()):
+                        pending_step = s
+                        break
+
+                if pending_step:
+                    document_number = f"{document_type}#{document_id}"
+                    NotificationService.create_notifications_for_role(
+                        db,
+                        pending_step.required_role,
+                        notification_type="APPROVAL_PENDING",
+                        title=f"Your Turn to Approve: {document_number}",
+                        message=f"{document_number} step {pending_step.step_number} is now waiting for your approval.",
+                        document_type=document_type,
+                        document_id=document_id,
+                        document_number=document_number,
+                    )
+
+        return is_approved
 
     @staticmethod
     def reject_document(

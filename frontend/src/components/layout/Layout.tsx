@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../ui";
+import { NotificationCenter } from "../notifications/NotificationCenter";
 
 interface NavGroup {
   label: string;
@@ -210,8 +211,26 @@ export function Layout() {
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 overflow-y-auto min-w-0">
-        <Outlet />
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Top Header */}
+        <div className="h-14 flex items-center justify-between px-6 bg-white border-b border-slate-200 flex-shrink-0">
+          <div />
+          <div className="flex items-center gap-4">
+            <NotificationCenter />
+            <div className="w-px h-6 bg-slate-200" />
+            <button
+              onClick={() => { logout(); navigate("/login"); }}
+              className="text-xs font-medium text-slate-600 hover:text-red-600 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto min-w-0">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from app.routers import auth, products, parties, purchase, sales, inventory, accounting, reports, warehouses, approvals
+from app.routers import auth, products, parties, purchase, sales, inventory, accounting, reports, warehouses, approvals, notifications
 
 app = FastAPI(
     title="SCM API",
@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_routers = [auth, products, parties, purchase, sales, inventory, accounting, reports, warehouses, approvals]
+_routers = [auth, products, parties, purchase, sales, inventory, accounting, reports, warehouses, approvals, notifications]
 for module in _routers:
     app.include_router(module.router, prefix="/api/v1")
 

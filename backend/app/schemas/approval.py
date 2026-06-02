@@ -41,6 +41,8 @@ class ApprovalRecordOut(BaseModel):
     document_type: str
     document_id: int
     step_id: int
+    step_number: int | None = None
+    required_role: str | None = None
     status: str  # PENDING, APPROVED, REJECTED
     approved_by: int | None
     approved_at: datetime | None

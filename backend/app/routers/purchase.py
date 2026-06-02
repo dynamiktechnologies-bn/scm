@@ -21,6 +21,7 @@ from app.schemas.purchase import (
 from app.services.number_service import next_number
 from app.services import inventory_service as inv_svc
 from app.services import posting_service as post_svc
+from app.services.approval_service import ApprovalService
 
 router = APIRouter(prefix="/purchase", tags=["purchase"])
 
@@ -181,12 +182,52 @@ def _set_po_status(db, po_id, new_status, allowed_from):
 
 @router.post("/orders/{po_id}/submit", response_model=POOut)
 def submit_po(po_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return _set_po_status(db, po_id, "SUBMITTED", ["DRAFT"])
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(404, "PO not found")
+    if po.status != "DRAFT":
+        raise HTTPException(400, f"Cannot submit PO in status {po.status}")
+
+    # Change status to SUBMITTED
+    po.status = "SUBMITTED"
+    db.commit()
+
+    # Create approval records for the configured workflow
+    workflow = ApprovalService.get_workflow(db, "PO", po.total_amount)
+    if workflow:
+        ApprovalService.create_approval_records(db, workflow.id, "PO", po.id, po.po_number)
+
+    db.refresh(po)
+    return po
 
 
 @router.post("/orders/{po_id}/approve", response_model=POOut)
-def approve_po(po_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    return _set_po_status(db, po_id, "APPROVED", ["SUBMITTED"])
+def approve_po(po_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Approve a PO at the current approval step.
+
+    This uses the approval workflow. Once all approvals are complete, the PO status changes to APPROVED.
+    """
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(404, "PO not found")
+    if po.status != "SUBMITTED":
+        raise HTTPException(400, f"Cannot approve PO in status {po.status}")
+
+    try:
+        # Approve at current step in the workflow
+        all_approved = ApprovalService.approve_document(
+            db, "PO", po_id, current_user.id, current_user.role
+        )
+
+        # If all approvals are complete, update PO status
+        if all_approved:
+            po.status = "APPROVED"
+            db.commit()
+
+        db.refresh(po)
+        return po
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/orders/{po_id}/cancel", response_model=POOut)

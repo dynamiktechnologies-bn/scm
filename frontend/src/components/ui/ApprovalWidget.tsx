@@ -7,6 +7,8 @@ import toast from "react-hot-toast";
 
 export interface ApprovalRecord {
   id: number;
+  step_number: number | null;
+  required_role: string | null;
   status: string;
   approved_by: number | null;
   approved_at: string | null;
@@ -68,7 +70,7 @@ export function ApprovalWidget({
   if (isLoading) return <div className="text-xs text-slate-400">Loading approval status...</div>;
   if (!status) return null;
 
-  const { records, is_approved, current_step, total_steps, steps_completed } = status;
+  const { records, is_approved, total_steps, steps_completed } = status;
 
   if (total_steps === 0) {
     return (
@@ -95,7 +97,7 @@ export function ApprovalWidget({
 
       {/* Step list */}
       <div className="space-y-2">
-        {records.map((record, i) => {
+        {records.map((record) => {
           const isActive = record.status === "PENDING";
           const isCompleted = record.status === "APPROVED";
           const isRejected = record.status === "REJECTED";
@@ -126,7 +128,10 @@ export function ApprovalWidget({
                   isActive ? "text-amber-700" :
                   "text-slate-600"
                 )}>
-                  Step {i + 1}
+                  Step {record.step_number}: {record.required_role || "Unknown Role"}
+                  {isActive && currentUserRole === record.required_role && (
+                    <span className="ml-2 text-amber-600 font-semibold">(You can approve)</span>
+                  )}
                 </p>
                 {record.notes && (
                   <p className="text-xs text-slate-500 mt-0.5 flex items-start gap-1">

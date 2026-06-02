@@ -4,13 +4,15 @@ import { api, fmt } from "../../lib/api";
 import { PageHeader, Spinner, StatusBadge } from "../../components/ui";
 import { ProcessBar, poSteps } from "../../components/ui/ProcessBar";
 import { ApprovalWidget, type ApprovalStatusData } from "../../components/ui/ApprovalWidget";
-import { ArrowLeft, CheckCircle, XCircle, Send, Plus } from "lucide-react";
+import { ArrowLeft, XCircle, Send, Plus } from "lucide-react";
 import type { PurchaseOrder, GoodsReceipt, SupplierInvoice } from "../../lib/types";
+import { useAuthStore } from "../../stores/authStore";
 import toast from "react-hot-toast";
 
 export function PODetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const { user } = useAuthStore();
 
   const { data: po, isLoading } = useQuery<PurchaseOrder>({
     queryKey: ["purchase-orders", id],
@@ -36,14 +38,13 @@ export function PODetailPage() {
     enabled: !!id,
   });
 
-  const approve = useMutation({
-    mutationFn: () => api.post(`/purchase/orders/${id}/approve`),
-    onSuccess: () => { toast.success("PO approved"); qc.invalidateQueries({ queryKey: ["purchase-orders", id] }); },
-    onError: (e: any) => toast.error(e.response?.data?.detail ?? "Error"),
-  });
   const submit = useMutation({
     mutationFn: () => api.post(`/purchase/orders/${id}/submit`),
-    onSuccess: () => { toast.success("PO submitted"); qc.invalidateQueries({ queryKey: ["purchase-orders", id] }); },
+    onSuccess: () => {
+      toast.success("PO submitted - awaiting approval");
+      qc.invalidateQueries({ queryKey: ["purchase-orders", id] });
+      qc.invalidateQueries({ queryKey: [`approvals-PO-${id}`] });
+    },
     onError: (e: any) => toast.error(e.response?.data?.detail ?? "Error"),
   });
   const cancel = useMutation({
@@ -92,11 +93,6 @@ export function PODetailPage() {
                 <Send size={14} /> Submit
               </button>
             )}
-            {po.status === "SUBMITTED" && (
-              <button className="btn-success" onClick={() => approve.mutate()}>
-                <CheckCircle size={14} /> Approve
-              </button>
-            )}
             {["DRAFT","SUBMITTED","APPROVED"].includes(po.status) && (
               <button className="btn-danger" onClick={() => cancel.mutate()}>
                 <XCircle size={14} /> Cancel
@@ -131,7 +127,8 @@ export function PODetailPage() {
               documentId={po.id}
               status={approvalStatus}
               isLoading={appLoading}
-              canApprove={["MANAGER", "DIRECTOR", "FINANCE_DIRECTOR"].includes(po.status)}
+              canApprove={po.status === "SUBMITTED"}
+              currentUserRole={user?.role}
             />
           </div>
         )}
