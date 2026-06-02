@@ -1,5 +1,6 @@
 from app.models.user import User
 from app.models.accounting import Account, JournalEntry, JournalLine
+from app.models.approval import ApprovalWorkflow, ApprovalStep, ApprovalRecord
 from app.models.party import Supplier, Customer
 from app.models.product import UoM, Product
 from app.models.warehouse import Warehouse, Location
@@ -24,6 +25,7 @@ from app.models.inv_ops import (
 __all__ = [
     "User",
     "Account", "JournalEntry", "JournalLine",
+    "ApprovalWorkflow", "ApprovalStep", "ApprovalRecord",
     "Supplier", "Customer",
     "UoM", "Product",
     "Warehouse", "Location",

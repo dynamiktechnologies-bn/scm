@@ -27,9 +27,12 @@ import {
   PurchaseRegisterPage, SalesRegisterPage, MarginReportPage,
 } from "./pages/reports/ReportsPages";
 import { WarehousesPage } from "./pages/settings/WarehousesPage";
+import { ApprovalsPage } from "./pages/settings/ApprovalsPage";
+import { UsersPage } from "./pages/settings/UsersPage";
 import { useAuthStore } from "./stores/authStore";
+import type { ReactElement } from "react";
 
-function RequireAuth({ children }: { children: JSX.Element }) {
+function RequireAuth({ children }: { children: ReactElement }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
@@ -67,6 +70,8 @@ export const router = createBrowserRouter([
       { path: "reports/sales-register", element: <SalesRegisterPage /> },
       { path: "reports/margin", element: <MarginReportPage /> },
       { path: "settings/warehouses", element: <WarehousesPage /> },
+      { path: "settings/approvals", element: <ApprovalsPage /> },
+      { path: "settings/users", element: <UsersPage /> },
     ],
   },
 ]);

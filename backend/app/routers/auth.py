@@ -54,3 +54,62 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/users", response_model=list[UserOut])
+def list_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admins can list users")
+    return db.query(User).order_by(User.created_at.desc()).all()
+
+
+@router.get("/users/{user_id}", response_model=UserOut)
+def get_user(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "ADMIN" and current_user.id != user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return user
+
+
+@router.put("/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admins can update users")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    allowed_fields = {"full_name", "role", "is_active"}
+    for key, value in body.items():
+        if key in allowed_fields:
+            setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admins can delete users")
+    if current_user.id == user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete your own user")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    db.delete(user)
+    db.commit()

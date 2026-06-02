@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, fmt } from "../../lib/api";
 import { PageHeader, Spinner, StatusBadge } from "../../components/ui";
 import { ProcessBar, poSteps } from "../../components/ui/ProcessBar";
+import { ApprovalWidget, type ApprovalStatusData } from "../../components/ui/ApprovalWidget";
 import { ArrowLeft, CheckCircle, XCircle, Send, Plus } from "lucide-react";
 import type { PurchaseOrder, GoodsReceipt, SupplierInvoice } from "../../lib/types";
 import toast from "react-hot-toast";
@@ -27,6 +28,11 @@ export function PODetailPage() {
     queryFn: () => api.get(`/purchase/invoices`).then((r) =>
       (r.data as SupplierInvoice[]).filter((i) => i.po_id === parseInt(id!))
     ),
+    enabled: !!id,
+  });
+  const { data: approvalStatus, isLoading: appLoading } = useQuery<ApprovalStatusData>({
+    queryKey: [`approvals-PO-${id}`],
+    queryFn: () => api.get(`/approvals/PO/${id}/status`).then((r) => r.data),
     enabled: !!id,
   });
 
@@ -115,6 +121,20 @@ export function PODetailPage() {
           </div>
           <ProcessBar steps={steps} />
         </div>
+
+        {/* ── Approval Status ──────────────────────────────────────────── */}
+        {approvalStatus && (
+          <div className="card p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Approval Status</h3>
+            <ApprovalWidget
+              documentType="PO"
+              documentId={po.id}
+              status={approvalStatus}
+              isLoading={appLoading}
+              canApprove={["MANAGER", "DIRECTOR", "FINANCE_DIRECTOR"].includes(po.status)}
+            />
+          </div>
+        )}
 
         {/* ── Header details ───────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-5">

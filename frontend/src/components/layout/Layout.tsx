@@ -77,6 +77,8 @@ const NAV: NavGroup[] = [
   {
     label: "Settings", icon: <Settings size={15} />,
     children: [
+      { label: "Users & Roles", to: "/settings/users" },
+      { label: "Approval Workflows", to: "/settings/approvals" },
       { label: "Warehouses & Locations", to: "/settings/warehouses" },
     ],
   },

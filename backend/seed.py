@@ -19,6 +19,7 @@ from app.models.party import Supplier, Customer
 from app.models.product import UoM, Product
 from app.models.warehouse import Warehouse, Location
 from app.models.inventory import InventoryTransaction
+from app.models.approval import ApprovalWorkflow, ApprovalStep
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -153,10 +154,37 @@ def _seed(db):
             txn_date=today,
         ))
 
-    print(f"  Users:     1 (admin@scm.example.com / admin123)")
-    print(f"  Accounts:  {len(coa)}")
-    print(f"  Suppliers: 2   Customers: 2")
-    print(f"  Products:  4 with opening stock")
+    # ── Approval Workflows ─────────────────────────────────────────────────
+    po_wf = ApprovalWorkflow(
+        document_type="PO",
+        name="Purchase Order Approval",
+        amount_threshold=Decimal("5000.00"),  # >$5000 requires director approval
+    )
+    db.add(po_wf)
+    db.flush()
+
+    # 2-level PO approval
+    db.add(ApprovalStep(workflow_id=po_wf.id, step_number=1, required_role="MANAGER", description="Manager approval"))
+    db.add(ApprovalStep(workflow_id=po_wf.id, step_number=2, required_role="DIRECTOR", description="Director approval"))
+
+    # GRN single-level approval
+    grn_wf = ApprovalWorkflow(document_type="GRN", name="Goods Receipt Approval")
+    db.add(grn_wf)
+    db.flush()
+    db.add(ApprovalStep(workflow_id=grn_wf.id, step_number=1, required_role="MANAGER", description="Receipt verification"))
+
+    # SO approval
+    so_wf = ApprovalWorkflow(document_type="SO", name="Sales Order Approval")
+    db.add(so_wf)
+    db.flush()
+    db.add(ApprovalStep(workflow_id=so_wf.id, step_number=1, required_role="MANAGER", description="Sales manager review"))
+    db.add(ApprovalStep(workflow_id=so_wf.id, step_number=2, required_role="FINANCE_DIRECTOR", description="Credit check", is_optional=True))
+
+    print(f"  Users:        1 (admin@scm.example.com / admin123)")
+    print(f"  Accounts:     {len(coa)}")
+    print(f"  Suppliers:    2   Customers: 2")
+    print(f"  Products:     4 with opening stock")
+    print(f"  Workflows:    3 (PO, GRN, SO)")
 
 
 if __name__ == "__main__":
